@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://linktr.ee/hn_animation/sitemap.xml
