@@ -16,10 +16,16 @@
   function lockScroll(){
     savedScrollY = getScroll();
     document.body.classList.add('webby-modal-open');
+    document.body.style.position = 'fixed';
+    document.body.style.top = '-' + savedScrollY + 'px';
+    document.body.style.width = '100%';
   }
 
   function unlockScroll(){
     document.body.classList.remove('webby-modal-open');
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     var y = savedScrollY;
     requestAnimationFrame(function(){
       window.scrollTo(0, y);
@@ -42,6 +48,7 @@
       var desc = card.getAttribute('data-description') || '';
       var image = card.getAttribute('data-image') || '';
       var author = card.getAttribute('data-author') || '';
+      var authorImage = card.getAttribute('data-author-image') || '';
       var date = card.getAttribute('data-date') || '';
       var tags = (card.getAttribute('data-tags') || '')
         .split(',').map(function(t){ return t.trim(); }).filter(Boolean);
@@ -61,7 +68,23 @@
       if (author) {
         var a = document.createElement('span');
         a.className = 'card-author';
-        a.innerHTML = 'by: <span class="author-name">' + escapeHtml(author) + '</span>';
+        if (authorImage) {
+          var av = document.createElement('img');
+          av.src = authorImage;
+          av.className = 'card-author-avatar';
+          av.alt = '';
+          av.setAttribute('draggable', 'false');
+          a.appendChild(av);
+        } else {
+          var ph = document.createElement('span');
+          ph.className = 'card-author-avatar card-author-avatar-placeholder';
+          ph.textContent = author.charAt(0);
+          a.appendChild(ph);
+        }
+        var nm = document.createElement('span');
+        nm.className = 'author-name';
+        nm.textContent = author;
+        a.appendChild(nm);
         metaEl.appendChild(a);
       }
       if (date) {
@@ -140,11 +163,48 @@
     descDialog.addEventListener('close', unlockScroll);
   }
 
-  /* ===== Protections ===== */
+  /* ===== Protections (multi-layer) ===== */
+
+  // 1) منع right-click على الصور
   document.addEventListener('contextmenu', function(e){
-    if (e.target && e.target.tagName === 'IMG') e.preventDefault();
+    var t = e.target;
+    if (t && (t.tagName === 'IMG' || (t.closest && t.closest('[data-webby-card]')))) {
+      e.preventDefault();
+      return false;
+    }
   });
+
+  // 2) منع سحب الصور
   document.addEventListener('dragstart', function(e){
-    if (e.target && e.target.tagName === 'IMG') e.preventDefault();
+    var t = e.target;
+    if (t && (t.tagName === 'IMG' || (t.closest && t.closest('[data-webby-card]')))) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  // 3) منع long-press على iOS (يحاول منع فتح قائمة الحفظ)
+  document.addEventListener('touchstart', function(e){
+    var t = e.target;
+    if (t && t.tagName === 'IMG') {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // 4) منع تحديد نص البطاقة (اختياري - يمكن إزالته)
+  document.addEventListener('selectstart', function(e){
+    var t = e.target;
+    if (t && t.tagName === 'IMG') {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  // 5) منع Ctrl+S / Cmd+S (حفظ الصفحة)
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      return false;
+    }
   });
 })();
