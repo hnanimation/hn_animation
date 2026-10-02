@@ -210,9 +210,11 @@ main {
 }
 .card-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   gap: 5px;
   margin-bottom: 8px;
+  max-width: 100%;
 }
 .tag {
   font-size: 10px;
@@ -222,6 +224,7 @@ main {
   color: inherit;
   border: 1px solid var(--muted-border);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .card-meta {
   display: flex;

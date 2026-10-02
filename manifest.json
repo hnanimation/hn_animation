@@ -1,0 +1,37 @@
+{
+  "name": "hn_animation",
+  "short_name": "hn_animation",
+  "description": "هذا مثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة مجانية مثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة فنان انميشن مستقل يحاول اصلاح الوضع بما يمكنه وحث الاخرين على الاصلاح ايضا بشكل جماعي اكتب نبذة عنك هنا.هذا \nمثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة مجانية\nفنان انميشن مستقل يحاول اصلاح الوضع بما يمكنه وحث الاخرين على الاصلاح ايضا بشكل جماعي",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#121212",
+  "theme_color": "#4f9dff",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "portfolio",
+    "personal"
+  ],
+  "webby": {
+    "version": 1,
+    "site_url": "https://hnanimation.github.io/hn_animation/",
+    "owner": "artist g",
+    "builder_path": "./webby/index.html"
+  }
+}
