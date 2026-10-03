@@ -1,4 +1,6 @@
-import { newProject, getCurrentProject, replaceProject } from '../core/project.js';
+import { attachSearchHistory } from '../web/ui/search-history.js';
+import { addSearchHistory } from '../core/user-data.js';
+import { initWebView, showWebView, runSearch as runSearchFromWebView, clearWebFeed, removeFeedPool } from '../web/ui/view.js';import { newProject, getCurrentProject, replaceProject } from '../core/project.js';
 import { createSection, SECTION_TYPES, getSectionIcon } from '../core/sections.js';
 import { updatePreview, resetPreviewPage, navigatePreviewTo } from '../preview/preview.js';
 import { exportAsSingleHtml } from '../exporter/html-exporter.js';
@@ -19,7 +21,7 @@ import {
 } from '../fs/project-io.js';
 import { pickFolder, isFsAccessSupported } from '../fs/file-system-access.js';
 import { saveHandle, loadHandle, ensurePermission } from '../fs/handle-store.js';
-
+import { initSearchView, resetSearchView, showSearchView, runSearch as runSearchFromSearchView } from '../web/ui/search-view.js';
 let selectedSectionId = null;
 let currentTab = 'content';
 let linkedFolderHandle = null;
@@ -41,9 +43,17 @@ function safe(label, fn) {
 
 export function initApp(root) {
   root.innerHTML = `
-    <header class="topbar">
-      <h1>Webby</h1>
-      <div class="actions">
+        <header class="topbar">
+      <h1 class="topbar-brand">Webby</h1>
+
+      <div class="topbar-search" id="topbar-search">
+        <input type="search" id="topbar-search-input" placeholder="ابحث..." autocomplete="off" />
+        <button id="topbar-search-btn" type="button" title="بحث">
+          <span data-icon="search" data-icon-size="18"></span>
+        </button>
+      </div>
+
+      <div class="actions" id="topbar-actions">
         <button id="btn-new">New</button>
         <button id="btn-open">Open</button>
         <button id="btn-save">Save</button>
@@ -51,27 +61,14 @@ export function initApp(root) {
         <button id="btn-export-html" data-hide-mobile="true">Export HTML</button>
         <button id="btn-export-zip">Export ZIP</button>
       </div>
+
       <div class="folder-status" id="folder-status">لا يوجد مجلد مرتبط</div>
     </header>
 
     <main class="app-content">
-      <div class="view" data-view="search">
-        <div class="view-placeholder">
-          <span class="view-placeholder-icon" data-icon="search" data-icon-size="48"></span>
-          <h2>بحث</h2>
-          <p>البحث داخل المشروع الحالي.</p>
-          <p class="placeholder-hint">سيُبنى قريبًا.</p>
-        </div>
-      </div>
+      <div class="view" data-view="search" id="search-view-root"></div>
 
-      <div class="view" data-view="web">
-        <div class="view-placeholder">
-          <span class="view-placeholder-icon" data-icon="earth" data-icon-size="48"></span>
-          <h2>Web</h2>
-          <p>الشبكة — الفيدز والمصادر والمحتوى من مواقع أخرى.</p>
-          <p class="placeholder-hint">سيُبنى في المرحلة 3.</p>
-        </div>
-      </div>
+      <div class="view" data-view="web" id="web-view-root"></div>
 
       <div class="view active" data-view="thisweb">
         <div class="thisweb-container">
@@ -170,6 +167,93 @@ export function initApp(root) {
     path = path.replace(/\/webby\/.*$/, '/');
     path = path.replace(/\/[^\/]*$/, '/');
     return location.origin + path + 'index.html';
+  }
+
+    /* ===== Topbar Search ===== */
+  const topbarSearchInput = document.getElementById('topbar-search-input');
+  const topbarSearchBtn = document.getElementById('topbar-search-btn');
+
+  const searchableViews = ['search', 'web', 'thisweb'];
+  const viewSearchMemory = { search: '', web: '', thisweb: '' };
+
+  function triggerTopbarSearch() {
+    const q = topbarSearchInput.value.trim();
+    if (!q) return;
+
+    // سجّل البحث
+    try {
+      if (currentView === 'web') {
+        addSearchHistory(q, 'web');
+      } else {
+        addSearchHistory(q, 'default');
+      }
+    } catch { /* ignore */ }
+
+    if (currentView === 'search') {
+      safe('search.runSearch', () => runSearchFromSearchView(q));
+    } else if (currentView === 'web') {
+      safe('web.runSearch', () => runSearchFromWebView(q));
+    } else if (currentView === 'thisweb') {
+      setView('search');
+      setTimeout(() => {
+        safe('search.runSearch', () => runSearchFromSearchView(q));
+      }, 50);
+    }
+
+    // حدّث السجل بعد البحث
+    if (searchHistoryUI) searchHistoryUI.close();
+  }
+
+  topbarSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerTopbarSearch();
+    }
+  });
+
+  topbarSearchBtn.addEventListener('click', () => {
+    triggerTopbarSearch();
+  });
+
+    /* ===== Search History Dropdown ===== */
+  let searchHistoryUI = null;
+  const topbarSearchWrapper = topbarSearchInput.parentElement;
+
+  function getSearchScope() {
+    if (currentView === 'search') return 'default';
+    if (currentView === 'web') return 'web';
+    return 'default';
+  }
+
+  function initSearchHistoryUI() {
+    const scope = getSearchScope();
+    if (searchHistoryUI && searchHistoryUI._scope === scope) return;
+
+    // احذف القديم
+    if (searchHistoryUI && searchHistoryUI._toggle) {
+      searchHistoryUI._toggle.remove();
+    }
+    const oldDropdown = topbarSearchWrapper.querySelector('.search-history-dropdown');
+    if (oldDropdown) oldDropdown.remove();
+
+    searchHistoryUI = attachSearchHistory(topbarSearchInput, topbarSearchWrapper, {
+      scope,
+      onSelect: (query) => {
+        triggerTopbarSearch();
+      },
+      onDelete: (query) => {
+        if (scope === 'web') {
+          safe('removeFeedPool', () => removeFeedPool(query));
+        }
+      },
+      onClearAll: () => {
+        if (scope === 'web') {
+          safe('clearWebFeed', () => clearWebFeed());
+        }
+      }
+    });
+    searchHistoryUI._scope = scope;
+    searchHistoryUI._toggle = topbarSearchWrapper.querySelector('.search-history-toggle');
   }
 
   function updateFolderStatus() {
@@ -429,12 +513,18 @@ export function initApp(root) {
 
   /* ===== View Switching ===== */
 
-  function setView(viewName) {
+    function setView(viewName) {
     if (!['search', 'web', 'thisweb', 'publish', 'bookmarks'].includes(viewName)) {
       viewName = 'thisweb';
     }
 
+    // احفظ نص البحث للـ view الحالي قبل التبديل
+    if (searchableViews.includes(currentView)) {
+      viewSearchMemory[currentView] = topbarSearchInput.value;
+    }
+
     currentView = viewName;
+    root.dataset.currentView = viewName;
 
     root.querySelectorAll('.view').forEach((v) => {
       v.classList.toggle('active', v.dataset.view === viewName);
@@ -450,7 +540,6 @@ export function initApp(root) {
       document.body.classList.remove('preview-fullscreen-open');
     }
 
-    
     if (viewName !== 'thisweb') {
       thiswebOfflineMode = false;
     }
@@ -458,8 +547,41 @@ export function initApp(root) {
       renderThisWeb();
     }
 
+    if (viewName === 'web') {
+      const webRoot = document.getElementById('web-view-root');
+      if (webRoot) safe('initWebView', () => initWebView(webRoot));
+      safe('showWebView', () => showWebView());
+    }
+
     if (viewName === 'publish') {
       refreshPreview();
+    }
+
+    if (viewName === 'search') {
+      const searchRoot = document.getElementById('search-view-root');
+      if (searchRoot) safe('initSearchView', () => initSearchView(searchRoot));
+      safe('showSearchView', () => showSearchView());
+      safe('initSearchHistoryUI', () => initSearchHistoryUI());
+    } else {
+      safe('resetSearchView', () => resetSearchView());
+    }
+
+    if (viewName === 'web') {
+      safe('initSearchHistoryUI', () => initSearchHistoryUI());
+    }
+
+    // استعد نص البحث للـ view الجديد
+    if (searchableViews.includes(viewName)) {
+      topbarSearchInput.value = viewSearchMemory[viewName] || '';
+      if (viewName === 'search') {
+        topbarSearchInput.placeholder = 'ابحث مؤقتًا...';
+      } else if (viewName === 'web') {
+        topbarSearchInput.placeholder = 'ابحث في الشبكة...';
+      } else {
+        topbarSearchInput.placeholder = 'ابحث...';
+      }
+    } else {
+      topbarSearchInput.value = '';
     }
 
     try {
@@ -949,6 +1071,12 @@ export function initApp(root) {
       setFullscreen(false);
     }
   });
+
+    /* ===== Web view ===== */
+  const webViewRoot = document.getElementById('web-view-root');
+  if (webViewRoot) {
+    safe('initWebView', () => initWebView(webViewRoot));
+  }
 
   /* ===== تشغيل أولي ===== */
   newProject('My Artist Website');

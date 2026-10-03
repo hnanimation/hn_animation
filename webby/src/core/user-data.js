@@ -13,7 +13,9 @@ const DEFAULT_DATA = {
   },
   communities: [],
   blocked_sources: [],
-  history: []
+  history: [],
+  search_history: [],
+  search_history_web: []
 };
 
 function load() {
@@ -66,6 +68,54 @@ export function clearUserData() {
   return structuredClone(DEFAULT_DATA);
 }
 
+/* ============ Search History ============ */
+
+const MAX_HISTORY = 30;
+
+export function getSearchHistory(scope = 'default') {
+  const data = load();
+  const key = scope === 'web' ? 'search_history_web' : 'search_history';
+  return Array.isArray(data[key]) ? data[key] : [];
+}
+
+export function addSearchHistory(query, scope = 'default') {
+  const q = String(query || '').trim();
+  if (!q || q.length < 2) return getSearchHistory(scope);
+
+  const data = load();
+  const key = scope === 'web' ? 'search_history_web' : 'search_history';
+  let list = Array.isArray(data[key]) ? data[key] : [];
+
+  list = list.filter((item) => item.toLowerCase() !== q.toLowerCase());
+  list.unshift(q);
+
+  if (list.length > MAX_HISTORY) list = list.slice(0, MAX_HISTORY);
+
+  data[key] = list;
+  save(data);
+  return list;
+}
+
+export function removeSearchHistory(query, scope = 'default') {
+  const q = String(query || '').trim();
+  const data = load();
+  const key = scope === 'web' ? 'search_history_web' : 'search_history';
+  let list = Array.isArray(data[key]) ? data[key] : [];
+  list = list.filter((item) => item !== q);
+  data[key] = list;
+  save(data);
+  return list;
+}
+
+export function clearSearchHistory(scope = 'default') {
+  const data = load();
+  const key = scope === 'web' ? 'search_history_web' : 'search_history';
+  data[key] = [];
+  save(data);
+  return [];
+}
+
+
 export function exportUserData() {
   const data = load();
   return {
@@ -115,7 +165,15 @@ export function importUserData(syncData, { merge = true } = {}) {
       ...(current.blocked_sources || []),
       ...(syncData.blocked_sources || [])
     ]),
-    history: mergeByTime(current.history || [], syncData.history || [])
+    history: mergeByTime(current.history || [], syncData.history || []),
+    search_history: dedupe([
+      ...(current.search_history || []),
+      ...(syncData.search_history || [])
+    ]),
+    search_history_web: dedupe([
+      ...(current.search_history_web || []),
+      ...(syncData.search_history_web || [])
+    ])
   };
 
   save(merged);

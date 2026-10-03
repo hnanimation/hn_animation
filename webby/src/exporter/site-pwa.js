@@ -176,6 +176,17 @@ export const WEBBY_FILES = [
   'src/renderer/site-renderer.js',
   'src/renderer/site-script.js',
 
+  // web
+  'src/web/web.css',
+  'src/web/core/content-item.js',
+  'src/web/core/connector.js',
+  'src/web/core/registry.js',
+  'src/web/connectors/openverse.js',
+  'src/web/connectors/wikimedia.js',
+  'src/web/ui/cards.js',
+  'src/web/ui/search-view.js',
+  'src/web/ui/view.js',
+
   // ui
   'src/ui/app.js',
   'src/ui/dialogs.js',
