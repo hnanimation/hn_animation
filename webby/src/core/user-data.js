@@ -15,7 +15,8 @@ const DEFAULT_DATA = {
   blocked_sources: [],
   history: [],
   search_history: [],
-  search_history_web: []
+  search_history_web: [],
+  seen_items: []
 };
 
 function load() {
@@ -115,6 +116,60 @@ export function clearSearchHistory(scope = 'default') {
   return [];
 }
 
+/* ============ Seen Items (Discovery History) ============ */
+
+const MAX_SEEN = 2000;
+
+export function getSeenItems() {
+  const data = load();
+  return Array.isArray(data.seen_items) ? data.seen_items : [];
+}
+
+export function isSeen(id) {
+  if (!id) return false;
+  const list = getSeenItems();
+  return list.includes(String(id));
+}
+
+export function markAsSeen(id) {
+  const s = String(id || '').trim();
+  if (!s) return;
+
+  const data = load();
+  let list = Array.isArray(data.seen_items) ? data.seen_items : [];
+
+  if (list.includes(s)) return;
+
+  list.push(s);
+  if (list.length > MAX_SEEN) list = list.slice(-MAX_SEEN);
+
+  data.seen_items = list;
+  save(data);
+}
+
+export function markManyAsSeen(ids) {
+  const data = load();
+  let list = Array.isArray(data.seen_items) ? data.seen_items : [];
+  const set = new Set(list);
+
+  ids.forEach((id) => {
+    const s = String(id || '').trim();
+    if (s && !set.has(s)) {
+      set.add(s);
+      list.push(s);
+    }
+  });
+
+  if (list.length > MAX_SEEN) list = list.slice(-MAX_SEEN);
+  data.seen_items = list;
+  save(data);
+}
+
+export function clearSeenItems() {
+  const data = load();
+  data.seen_items = [];
+  save(data);
+}
 
 export function exportUserData() {
   const data = load();
@@ -173,6 +228,10 @@ export function importUserData(syncData, { merge = true } = {}) {
     search_history_web: dedupe([
       ...(current.search_history_web || []),
       ...(syncData.search_history_web || [])
+    ]),
+    seen_items: dedupe([
+      ...(current.seen_items || []),
+      ...(syncData.seen_items || [])
     ])
   };
 

@@ -1,6 +1,11 @@
 import { register, getEnabled } from '../core/registry.js';
 import { createCard } from './cards.js';
-import { getUserData, updateUserData } from '../../core/user-data.js';
+import {
+  getUserData,
+  updateUserData,
+  getSearchHistory,
+  addSearchHistory
+} from '../../core/user-data.js';
 
 import openverse from '../connectors/openverse.js';
 import wikimedia from '../connectors/wikimedia.js';
@@ -14,17 +19,22 @@ let gridEl = null;
 let statusEl = null;
 let emptyEl = null;
 
-const INITIAL_LIMIT = 16;
-const LIMIT_STEP = 16;
+const DEFAULT_QUERIES = ['sea', 'tree', 'sky'];
+const BATCH_SIZE = 16;
+const PER_PAGE = 8;
+const MAX_FILL_ITERATIONS = 20;
 
 const state = {
-  pools: new Map(),       // query -> { query, items, page, hasMore }
-  isLoading: false,
-  controller: null,
-  displayLimit: INITIAL_LIMIT
+  pools: new Map(),
+  seenIds: new Set(),
+  userSearched: new Set(),
+  loadingQueries: new Set(),
+  autoLoaded: false,
+  isFilling: false,
+  checkTimer: null,
+  fillTimer: null,
+  online: navigator.onLine
 };
-
-const PER_PAGE = 8;
 
 export function initWebView(root) {
   if (initialized) return;
@@ -35,7 +45,7 @@ export function initWebView(root) {
     <div id="web-status" class="web-status"></div>
     <div id="web-results" class="web-grid"></div>
     <div id="web-empty" class="web-empty" style="display:none;">
-      <p>اكتب في شريط البحث بالأعلى وابدأ.</p>
+      <p>جاري التحميل...</p>
     </div>
   `;
 
@@ -44,75 +54,224 @@ export function initWebView(root) {
   emptyEl = root.querySelector('#web-empty');
 
   gridEl.addEventListener('scroll', onScroll, { passive: true });
+
+  window.addEventListener('offline', () => {
+    state.online = false;
+    updateStatus();
+  });
+  window.addEventListener('online', () => {
+    state.online = true;
+    updateStatus();
+  });
 }
 
+function loadSeenIds() {
+  // جلسة فقط — لا نحفظ في localStorage
+  state.seenIds = new Set();
+}
+
+/* ============ Auto-load ============ */
+
+async function autoLoad() {
+  if (state.autoLoaded) return;
+  state.autoLoaded = true;
+
+  loadSeenIds();
+
+  let queries = getSearchHistory('web');
+
+  if (queries.length === 0) {
+    console.log('[Webby] first run → seeding defaults');
+    DEFAULT_QUERIES.forEach((q) => addSearchHistory(q, 'web'));
+    queries = DEFAULT_QUERIES.slice();
+  }
+
+  queries = queries.slice(0, 3);
+  console.log('[Webby] auto-load:', queries);
+
+  if (emptyEl) {
+    emptyEl.style.display = 'flex';
+    emptyEl.innerHTML = '<p>جاري التحميل...</p>';
+  }
+
+  for (const q of queries) {
+    await addPool(q, { silent: true });
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  // ابدأ حلقة التعبئة
+  scheduleCheck();
+}
+
+export function showWebView() {
+  if (!state.autoLoaded) {
+    autoLoad();
+  } else {
+    scheduleCheck();
+  }
+}
+
+/* ============ Scroll ============ */
+
 function onScroll() {
-  if (state.isLoading) return;
-  if (state.pools.size === 0) return;
+  if (state.isFilling) return;
 
   const { scrollTop, clientHeight, scrollHeight } = gridEl;
-  if (scrollHeight - (scrollTop + clientHeight) > 500) return;
+  const distance = scrollHeight - (scrollTop + clientHeight);
 
-  // 1) أولًا: وسّع العرض إذا كان هناك المزيد من العناصر في المجمّعات
-  const totalPoolItems = Array.from(state.pools.values()).reduce(
-    (sum, p) => sum + p.items.length,
-    0
+  if (distance > 800) return;
+
+  // 1) إذا فيه طوابير → ارسم
+  const hasQueue = Array.from(state.pools.values()).some(
+    (p) => p.queue.length > 0
   );
 
-  if (state.displayLimit < totalPoolItems) {
-    state.displayLimit += LIMIT_STEP;
-    renderMixed();
+  if (hasQueue) {
+    renderNext();
     return;
   }
 
-  // 2) ثانيًا: حمّل المزيد من المجمّعات التي لا تزال تملك المزيد
-  const candidates = Array.from(state.pools.values()).filter((p) => p.hasMore);
-  if (candidates.length === 0) return;
+  // 2) وإلا → اجلب من pool التي لديها hasMore (الأقل عناصر)
+  const fetchable = Array.from(state.pools.values())
+    .filter((p) => p.hasMore && !state.loadingQueries.has(p.query));
 
-  // اختر الأقل عناصر (للتوازن)
-  candidates.sort((a, b) => a.items.length - b.items.length);
-  fetchNextPage(candidates[0]);
+  if (fetchable.length === 0) return;
+
+  fetchable.sort((a, b) => a.items.length - b.items.length);
+  const target = fetchable[0];
+
+  fetchNextPage(target, { silent: true }).then(() => {
+    renderNext();
+    scheduleCheck();
+  });
 }
 
-export function showWebView() {}
+/* ============ Core Fill Loop ============ */
 
-export async function runSearch(query) {
+function scheduleCheck() {
+  clearTimeout(state.checkTimer);
+  state.checkTimer = setTimeout(ensureScreenFilled, 100);
+}
+
+async function ensureScreenFilled() {
+  if (state.isFilling) return;
+  state.isFilling = true;
+
+  try {
+    let iterations = 0;
+
+    while (iterations++ < MAX_FILL_ITERATIONS) {
+      if (!state.online) break;
+
+      const shown = gridEl.children.length;
+      const scrollable = gridEl.scrollHeight > gridEl.clientHeight + 50;
+
+      // الشرط الأدنى: 24 بطاقة + قابل للتمرير
+      if (shown >= 24 && scrollable) break;
+
+      // 1) ارسم من الطوابير
+      const hasQueue = Array.from(state.pools.values()).some(
+        (p) => p.queue.length > 0
+      );
+
+      if (hasQueue) {
+        renderNext();
+        continue;
+      }
+
+      // 2) اجلب من المصادر
+      const fetchable = Array.from(state.pools.values())
+        .filter((p) => p.hasMore && !state.loadingQueries.has(p.query));
+
+      if (fetchable.length === 0) break;
+
+      fetchable.sort((a, b) => a.items.length - b.items.length);
+      const target = fetchable[0];
+
+      const before = target.items.length;
+      await fetchNextPage(target, { silent: true });
+      const after = target.items.length;
+
+      if (after === before) target.hasMore = false;
+    }
+  } finally {
+    state.isFilling = false;
+    updateStatus();
+  }
+}
+
+/* ============ Pools ============ */
+
+async function addPool(query, options = {}) {
+  const q = String(query || '').trim();
+  if (!q) return;
+  if (state.pools.has(q)) return;
+
+  const pool = {
+    query: q,
+    items: [],
+    queue: [],
+    page: 1,
+    hasMore: true
+  };
+  state.pools.set(q, pool);
+
+  if (!options.silent) {
+    try {
+      const data = getUserData();
+      if (!data.preferences) data.preferences = {};
+      data.preferences.last_web_query = q;
+      updateUserData({ preferences: data.preferences });
+    } catch { /* ignore */ }
+  }
+
+  await fetchNextPage(pool, options);
+}
+
+export async function runSearch(query, options = {}) {
   if (!initialized) return;
 
   const q = String(query || '').trim();
   if (!q) return;
 
-  const existing = state.pools.get(q);
-  if (existing) {
-    console.log('[Webby] query already in pool:', q);
+  if (state.pools.has(q)) {
+    // إذا المستخدم بحث بشكل صريح، اسمح بإعادة استخدام العناصر
+    if (!options.silent) {
+      state.userSearched.add(q);
+      const pool = state.pools.get(q);
+      // أعد ما لم يُعرض
+      if (pool.queue.length === 0 && pool.hasMore) {
+        await fetchNextPage(pool, { silent: true });
+      }
+      scheduleCheck();
+      return;
+    }
     return;
   }
 
-  emptyEl.style.display = 'none';
+  if (!options.silent && emptyEl) {
+    emptyEl.style.display = 'none';
+  }
 
-  const pool = { query: q, items: [], page: 1, hasMore: true };
-  state.pools.set(q, pool);
+  if (!options.silent) state.userSearched.add(q);
 
-  try {
-    const data = getUserData();
-    if (!data.preferences) data.preferences = {};
-    data.preferences.last_web_query = q;
-    updateUserData({ preferences: data.preferences });
-  } catch { /* ignore */ }
+  await addPool(q, options);
 
-  await fetchNextPage(pool);
+  if (!options.silent) scheduleCheck();
 }
 
-async function fetchNextPage(pool) {
-  if (state.isLoading || !pool || !pool.hasMore) return;
+/* ============ Fetch ============ */
 
-  if (state.controller) state.controller.abort();
-  state.controller = new AbortController();
-  const signal = state.controller.signal;
+async function fetchNextPage(pool, options = {}) {
+  if (!pool || !pool.hasMore) return;
+  if (state.loadingQueries.has(pool.query)) return;
 
-  state.isLoading = true;
-  statusEl.textContent = `جاري البحث في "${pool.query}"...`;
-  statusEl.className = 'web-status loading';
+  state.loadingQueries.add(pool.query);
+
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   const apiKeys = {};
   try {
@@ -122,9 +281,9 @@ async function fetchNextPage(pool) {
 
   const connectors = getEnabled(apiKeys);
   if (connectors.length === 0) {
-    statusEl.textContent = 'لا توجد مصادر مفعّلة.';
-    statusEl.className = 'web-status error';
-    state.isLoading = false;
+    clearTimeout(timeout);
+    state.loadingQueries.delete(pool.query);
+    pool.hasMore = false;
     return;
   }
 
@@ -145,7 +304,7 @@ async function fetchNextPage(pool) {
 
     if (signal.aborted) return;
 
-    const newItems = [];
+    let newItems = [];
     const errors = [];
 
     results.forEach((r) => {
@@ -155,86 +314,120 @@ async function fetchNextPage(pool) {
       if (error) errors.push(error);
     });
 
+    // فلترة
+    const otherIds = new Set();
+    state.pools.forEach((p, q) => {
+      if (q === pool.query) return;
+      p.items.forEach((it) => otherIds.add(it.id));
+    });
+    const poolIds = new Set(pool.items.map((it) => it.id));
+
+    newItems = newItems.filter((it) => {
+      if (state.seenIds.has(it.id)) return false;
+      if (poolIds.has(it.id)) return false;
+      if (otherIds.has(it.id)) return false;
+      return true;
+    });
+
     pool.items.push(...newItems);
+    pool.queue.push(...newItems);
     pool.page += 1;
 
-    if (newItems.length < 6) pool.hasMore = false;
+    if (newItems.length < 4) pool.hasMore = false;
 
-    renderMixed();
-
-    if (errors.length > 0) {
-      statusEl.textContent = `⚠️ ${errors.join(' • ')}`;
-      statusEl.className = 'web-status error';
+    if (errors.length > 0 && !options.silent) {
+      console.warn('[Webby] errors:', errors);
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
-      statusEl.textContent = `خطأ: ${err.message}`;
-      statusEl.className = 'web-status error';
+      console.warn('[Webby] fetch error:', err);
     }
+    pool.hasMore = false;
   } finally {
-    state.isLoading = false;
+    clearTimeout(timeout);
+    state.loadingQueries.delete(pool.query);
   }
 }
 
-/**
- * يعرض `state.displayLimit` عنصرًا، موزّعين بالتساوي على المجمّعات،
- * ومرتّبين عشوائيًا.
- */
-function renderMixed() {
-  gridEl.innerHTML = '';
+/* ============ Render ============ */
 
-  const pools = Array.from(state.pools.values()).filter((p) => p.items.length > 0);
-  if (pools.length === 0) {
-    updateStatus();
-    return;
-  }
+function renderNext() {
+  const available = Array.from(state.pools.values()).filter(
+    (p) => p.queue.length > 0
+  );
 
-  const n = pools.length;
-  const limit = state.displayLimit;
-  const base = Math.floor(limit / n);
-  const remainder = limit % n;
+  if (available.length === 0) return false;
 
-  // اختر عيّنة من كل مجمّع
-  const sample = [];
-  pools.forEach((pool, i) => {
+  const n = available.length;
+  const base = Math.floor(BATCH_SIZE / n);
+  const remainder = BATCH_SIZE % n;
+
+  const batch = [];
+  available.forEach((pool, i) => {
     const take = base + (i < remainder ? 1 : 0);
     if (take <= 0) return;
-    const slice = pool.items.slice(0, take);
-    sample.push(...slice);
+    const slice = pool.queue.splice(0, take);
+    batch.push(...slice);
   });
 
-  // shuffle (Fisher-Yates)
-  for (let i = sample.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [sample[i], sample[j]] = [sample[j], sample[i]];
-  }
+  if (batch.length === 0) return false;
 
-  // render
-  sample.forEach((item) => {
+  shuffle(batch);
+
+  const seenIds = [];
+  batch.forEach((item) => {
+    state.seenIds.add(item.id);
+    seenIds.push(item.id);
     gridEl.appendChild(createCard(item, openItem));
   });
 
+  // لا نحفظ في localStorage — للجلسة فقط
+
   updateStatus();
+  return true;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
 }
 
 function updateStatus() {
   const pools = Array.from(state.pools.values());
   const total = pools.reduce((sum, p) => sum + p.items.length, 0);
 
+  if (!state.online) {
+    statusEl.textContent = '⚠️ لا يوجد اتصال بالإنترنت';
+    statusEl.className = 'web-status error';
+    return;
+  }
+
   if (total === 0) {
-    statusEl.textContent = '';
+    statusEl.textContent = state.isFilling ? 'جاري التحميل...' : '';
     statusEl.className = 'web-status';
     return;
   }
 
-  const summary = pools
-    .map((p) => `${p.query} (${p.items.length})`)
-    .join(' + ');
-
-  const shown = Math.min(state.displayLimit, total);
+  const summary = pools.map((p) => `${p.query} (${p.items.length})`).join(' + ');
+  const shown = gridEl.children.length;
 
   statusEl.textContent = `✅ ${total} نتيجة — معروض ${shown} — ${summary}`;
   statusEl.className = 'web-status success';
+}
+
+/* ============ Public API ============ */
+
+export function clearWebFeed() {
+  state.pools.clear();
+  state.userSearched.clear();
+  if (gridEl) gridEl.innerHTML = '';
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.className = 'web-status';
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
 }
 
 export function removeFeedPool(query) {
@@ -248,18 +441,13 @@ export function removeFeedPool(query) {
     }
   }
 
-  renderMixed();
+  state.userSearched.delete(q);
+  gridEl.innerHTML = '';
+  scheduleCheck();
 }
 
-export function clearWebFeed() {
-  state.pools.clear();
-  state.displayLimit = INITIAL_LIMIT;
-  if (gridEl) gridEl.innerHTML = '';
-  if (statusEl) {
-    statusEl.textContent = '';
-    statusEl.className = 'web-status';
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
+export function resetWebView() {
+  state.autoLoaded = false;
 }
 
 function openItem(item) {

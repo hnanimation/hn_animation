@@ -1,3 +1,5 @@
+const MAX_RETRIES = 2;
+
 export function createCard(item, onClick) {
   const card = document.createElement('article');
   card.className = 'web-card';
@@ -8,16 +10,34 @@ export function createCard(item, onClick) {
 
   if (item.thumbnail?.url) {
     const img = document.createElement('img');
-    img.src = item.thumbnail.url;
     img.alt = item.title || '';
     img.loading = 'lazy';
     img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+
+    let retries = 0;
+
+    function tryLoad(src) {
+      img.src = src;
+    }
+
     img.addEventListener('error', () => {
-      img.remove();
-      const empty = document.createElement('div');
-      empty.className = 'web-card-thumb-empty';
-      thumbWrap.appendChild(empty);
+      if (retries < MAX_RETRIES) {
+        retries++;
+        const sep = item.thumbnail.url.includes('?') ? '&' : '?';
+        tryLoad(`${item.thumbnail.url}${sep}_r=${retries}&_t=${Date.now()}`);
+      } else {
+        // استبدل بـ placeholder
+        if (img.parentElement) {
+          img.remove();
+          const empty = document.createElement('div');
+          empty.className = 'web-card-thumb-empty';
+          thumbWrap.appendChild(empty);
+        }
+      }
     });
+
+    tryLoad(item.thumbnail.url);
     thumbWrap.appendChild(img);
   } else {
     const empty = document.createElement('div');

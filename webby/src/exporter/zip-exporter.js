@@ -13,7 +13,8 @@ import {
   buildSiteManifest,
   buildSiteServiceWorker,
   buildWebbyConfig,
-  fetchWebbyFiles
+  fetchWebbyFiles,
+  stripLiveServerInjection
 } from './site-pwa.js';
 
 export async function exportAsZip(project, onProgress) {
@@ -93,7 +94,8 @@ export async function exportAsZip(project, onProgress) {
   const site = renderSite(project, { exportAssets: true });
 
   Object.entries(site).forEach(([name, content]) => {
-    root.file(name, content);
+    const clean = stripLiveServerInjection(content);
+    root.file(name, clean);
   });
 
   // ===== 4) webby-project.json =====
@@ -161,19 +163,21 @@ export async function exportAsZip(project, onProgress) {
     }));
     webbyFolder.file('manifest.json', JSON.stringify(embeddedManifest, null, 2));
 
-    // ملفات نصية + أيقونات
+        // ملفات نصية + أيقونات
+    const webbyAssets = webbyFolder.folder('assets');
 
     webbyFiles.forEach((content, path) => {
       if (path.startsWith('__icon__')) {
         const iconName = path.replace('__icon__', '');
-        // إلى assets/ للموقع الرئيسي
         assets.file(iconName, content);
-        // إلى /webby/public/icons/ (يستخدمها manifest الابن)
         const webbyIcons = webbyFolder.folder('public').folder('icons');
         webbyIcons.file(iconName, content);
         return;
       }
-      webbyFolder.file(path, content);
+
+      // نظّف أي حقن من Live Server / إضافات المتصفح
+      const clean = stripLiveServerInjection(content);
+      webbyFolder.file(path, clean);
     });
 
     // Webby index.html — نسخة معدّلة لتعمل من /webby/

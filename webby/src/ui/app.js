@@ -169,6 +169,26 @@ export function initApp(root) {
     return location.origin + path + 'index.html';
   }
 
+    /* ===== Offline Detection ===== */
+  function showOfflineBanner() {
+    if (document.getElementById('offline-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'offline-banner';
+    banner.className = 'offline-banner';
+    banner.textContent = '⚠️ لا يوجد اتصال بالإنترنت';
+    document.body.appendChild(banner);
+  }
+
+  function hideOfflineBanner() {
+    const b = document.getElementById('offline-banner');
+    if (b) b.remove();
+  }
+
+  window.addEventListener('offline', showOfflineBanner);
+  window.addEventListener('online', hideOfflineBanner);
+
+  if (!navigator.onLine) showOfflineBanner();
+
     /* ===== Topbar Search ===== */
   const topbarSearchInput = document.getElementById('topbar-search-input');
   const topbarSearchBtn = document.getElementById('topbar-search-btn');

@@ -137,6 +137,7 @@ export function buildWebbyConfig(project) {
 export const WEBBY_FILES = [
   'index.html',
   'style.css',
+  'manifest.json',
   'src/main.js',
 
   // core
@@ -176,17 +177,6 @@ export const WEBBY_FILES = [
   'src/renderer/site-renderer.js',
   'src/renderer/site-script.js',
 
-  // web
-  'src/web/web.css',
-  'src/web/core/content-item.js',
-  'src/web/core/connector.js',
-  'src/web/core/registry.js',
-  'src/web/connectors/openverse.js',
-  'src/web/connectors/wikimedia.js',
-  'src/web/ui/cards.js',
-  'src/web/ui/search-view.js',
-  'src/web/ui/view.js',
-
   // ui
   'src/ui/app.js',
   'src/ui/dialogs.js',
@@ -196,7 +186,19 @@ export const WEBBY_FILES = [
 
   // utils
   'src/utils/id.js',
-  'src/utils/slug.js'
+  'src/utils/slug.js',
+
+  // web
+  'src/web/web.css',
+  'src/web/core/content-item.js',
+  'src/web/core/connector.js',
+  'src/web/core/registry.js',
+  'src/web/connectors/openverse.js',
+  'src/web/connectors/wikimedia.js',
+  'src/web/ui/cards.js',
+  'src/web/ui/search-history.js',
+  'src/web/ui/search-view.js',
+  'src/web/ui/view.js'
 ];
 
 /**
@@ -237,4 +239,37 @@ export async function fetchWebbyFiles(onProgress) {
   }
 
   return files;
+}
+
+/**
+ * يزيل أي حقن من Live Server (script + تعليقات) من نص HTML/JS.
+ */
+export function stripLiveServerInjection(text) {
+  if (!text) return text;
+
+  let out = String(text);
+
+  // 1) احذف سكربت Live Server (بين <!-- Code injected by live-server --> وما بعده)
+  out = out.replace(
+    /<!--\s*Code injected by live-server\s*-->[\s\S]*?<\/script>/gi,
+    ''
+  );
+
+  // 2) احذف أي mention لـ live-server ws
+  out = out.replace(/\/ws['"`]?\s*\)/gi, "''");
+  out = out.replace(/wss?:\/\/[^'"`]*\/ws/gi, '');
+
+  // 3) احذف div#highlighter--hover-tools (من إضافة)
+  out = out.replace(
+    /<div id="highlighter--hover-tools"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi,
+    ''
+  );
+
+  // 4) احذف أي script يشير إلى webextension.js (إضافة متصفح)
+  out = out.replace(
+    /<script[^>]*src="[^"]*webextension[^"]*"[^>]*><\/script>/gi,
+    ''
+  );
+
+  return out;
 }

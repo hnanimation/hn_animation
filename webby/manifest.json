@@ -1,7 +1,7 @@
 {
-  "name": "hn_animation",
-  "short_name": "hn_animation",
-  "description": "هذا مثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة مجانية مثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة فنان انميشن مستقل يحاول اصلاح الوضع بما يمكنه وحث الاخرين على الاصلاح ايضا بشكل جماعي اكتب نبذة عنك هنا.هذا \nمثال لموقع فنان خاص يمكن ربطه بالانترنت عبر اداة مجانية\nفنان انميشن مستقل يحاول اصلاح الوضع بما يمكنه وحث الاخرين على الاصلاح ايضا بشكل جماعي",
+  "name": "Webby — Website Builder",
+  "short_name": "Webby",
+  "description": "أداة محلية لبناء مواقع مستقلة",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -24,14 +24,17 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": [
-    "portfolio",
-    "personal"
-  ],
-  "webby": {
-    "version": 1,
-    "site_url": "https://hnanimation.github.io/hn_animation/",
-    "owner": "artist g",
-    "builder_path": "./webby/index.html"
-  }
+  "categories": ["productivity", "developer"],
+  "shortcuts": [
+    {
+      "name": "مشروع جديد",
+      "short_name": "New",
+      "url": "./index.html?action=new"
+    },
+    {
+      "name": "فتح مشروع",
+      "short_name": "Open",
+      "url": "./index.html?action=open"
+    }
+  ]
 }

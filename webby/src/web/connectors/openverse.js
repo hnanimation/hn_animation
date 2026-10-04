@@ -31,32 +31,43 @@ export default defineConnector({
 
     const data = await res.json();
 
-    return (data.results || []).map((item) =>
-      createContentItem({
-        id: `openverse-${item.id}`,
-        connectorId: 'openverse',
-        type: 'image',
-        title: item.title || '',
-        description: item.description || '',
-        creator: {
-          name: item.creator || 'Unknown',
-          url: item.creator_url || ''
-        },
-        source: {
-          platform: 'Openverse',
-          name: 'Openverse',
-          url: 'https://openverse.org'
-        },
-        originalUrl: item.foreign_landing_url || item.url,
-        thumbnail: {
-          url: item.thumbnail || item.url,
-          source: 'external'
-        },
-        mediaUrl: item.url,
-        tags: (item.tags || []).map((t) => t.name || t).filter(Boolean),
-        license: item.license || null,
-        raw: item
+    return (data.results || [])
+      .filter((item) => {
+        // تجاهل ما يأتي من Wikimedia — لدينا connector خاص به
+        const src = (item.source || '').toLowerCase();
+        const srcName = (item.source_name || '').toLowerCase();
+        if (src === 'wikimedia' || src.includes('wikimedia')) return false;
+        if (srcName.includes('wikimedia')) return false;
+        return true;
       })
-    );
+      .map((item) => {
+        const sourceName = item.source_name || 'Openverse';
+
+        return createContentItem({
+          id: `openverse-${item.id}`,
+          connectorId: 'openverse',
+          type: 'image',
+          title: item.title || '',
+          description: item.description || '',
+          creator: {
+            name: item.creator || 'Unknown',
+            url: item.creator_url || ''
+          },
+          source: {
+            platform: sourceName,
+            name: sourceName,
+            url: 'https://openverse.org'
+          },
+          originalUrl: item.foreign_landing_url || item.url,
+          thumbnail: {
+            url: item.thumbnail || item.url,
+            source: 'external'
+          },
+          mediaUrl: item.url,
+          tags: (item.tags || []).map((t) => t.name || t).filter(Boolean),
+          license: item.license || null,
+          raw: item
+        });
+      });
   }
 });
