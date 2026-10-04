@@ -14,6 +14,7 @@ export function createContentItem({
   originalUrl = '',
   thumbnail = { url: '', source: 'external' },
   mediaUrl = '',
+  videoMode = 'direct',   // 'direct' (mp4) | 'embed' (iframe)
   publishedAt = null,
   duration = null,
   language = null,
@@ -45,6 +46,7 @@ export function createContentItem({
       source: thumbnail.source || 'external'
     },
     media_url: String(mediaUrl || ''),
+    video_mode: videoMode,
     published_at: publishedAt,
     duration,
     language,

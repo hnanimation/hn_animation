@@ -195,9 +195,11 @@ export const WEBBY_FILES = [
   'src/web/core/registry.js',
   'src/web/connectors/openverse.js',
   'src/web/connectors/wikimedia.js',
+  'src/web/connectors/internet-archive.js',
   'src/web/ui/cards.js',
   'src/web/ui/search-history.js',
   'src/web/ui/search-view.js',
+  'src/web/ui/video-modal.js',
   'src/web/ui/view.js'
 ];
 
