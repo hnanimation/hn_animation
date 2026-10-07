@@ -6,6 +6,7 @@ const DEFAULT_DATA = {
   bookmarks: [],
   subscriptions: [],
   api_keys: {},
+  source_filters: {},
   preferences: {
     language: 'ar',
     theme: 'dark',
@@ -211,6 +212,10 @@ export function importUserData(syncData, { merge = true } = {}) {
       ...current.api_keys,
       ...(syncData.api_keys || {})
     },
+    source_filters: {
+      ...(current.source_filters || {}),
+      ...(syncData.source_filters || {})
+    },
     preferences: {
       ...current.preferences,
       ...(syncData.preferences || {})
@@ -262,4 +267,39 @@ function mergeByTime(a = [], b = []) {
 
 function dedupe(arr) {
   return Array.from(new Set(arr));
+}
+/* ============ Source Filters ============ */
+
+export function getSourceFilters() {
+  const data = load();
+  return data.source_filters || {};
+}
+
+export function isSourceEnabled(sourceId) {
+  const filters = getSourceFilters();
+  return filters[sourceId] !== false;
+}
+
+export function setSourceEnabled(sourceId, enabled) {
+  const data = load();
+  if (!data.source_filters) data.source_filters = {};
+
+  if (enabled) delete data.source_filters[sourceId];
+  else data.source_filters[sourceId] = false;
+
+  save(data);
+  return data.source_filters;
+}
+
+export function setAllSourcesEnabled(sourceIds, enabled) {
+  const data = load();
+  if (!data.source_filters) data.source_filters = {};
+
+  sourceIds.forEach((id) => {
+    if (enabled) delete data.source_filters[id];
+    else data.source_filters[id] = false;
+  });
+
+  save(data);
+  return data.source_filters;
 }

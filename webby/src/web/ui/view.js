@@ -5,14 +5,26 @@ import {
   getUserData,
   updateUserData,
   getSearchHistory,
-  addSearchHistory
+  addSearchHistory,
+  getSourceFilters
 } from '../../core/user-data.js';
 
 import openverse from '../connectors/openverse.js';
 import wikimedia from '../connectors/wikimedia.js';
+import pexels from '../connectors/pexels.js';
+import peertube from '../connectors/peertube.js';
+import { openWebSettings } from './web-settings.js';
+import { initSourceFilter } from './source-filter.js';
+import {
+  markConnectorFailed,
+  markConnectorSuccess,
+  isConnectorCoolingDown
+} from '../core/connector-cooldown.js';
 
 register(openverse);
 register(wikimedia);
+register(pexels);
+register(peertube);
 
 let rootEl, gridEl, statusEl, emptyEl;
 let initialized = false;
@@ -55,7 +67,15 @@ export function initWebView(el) {
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><path d="M7 2v20"/><path d="M17 2v20"/><path d="M2 12h20"/><path d="M2 7h5"/><path d="M2 17h5"/><path d="M17 17h5"/><path d="M17 7h5"/></svg>
         </button>
       </div>
-      <div id="web-status" class="web-status"></div>
+            <div id="web-status" class="web-status"></div>
+      <div class="web-actions">
+        <button type="button" class="web-settings-btn" id="web-settings-btn" title="إعدادات المصادر" aria-label="إعدادات المصادر">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button type="button" class="web-settings-btn web-source-filter-btn" id="web-source-filter-btn" title="فلترة المصادر" aria-label="فلترة المصادر">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+      </div>
     </div>
     <div id="web-results" class="web-grid"></div>
     <div id="web-empty" class="web-empty" style="display:none;"><p>جاري التحميل...</p></div>
@@ -68,6 +88,45 @@ export function initWebView(el) {
   el.querySelectorAll('.web-filter-btn').forEach((b) => {
     b.addEventListener('click', () => setFilter(b.dataset.filter));
   });
+
+    const settingsBtn = el.querySelector('#web-settings-btn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => openWebSettings());
+  }
+
+  const actionsWrap = el.querySelector('.web-actions');
+  if (actionsWrap) {
+    initSourceFilter(actionsWrap);
+  }
+
+    window.addEventListener('webby:sources-changed', () => {
+    const filters = getSourceFilters();
+
+    // 1) احذف بطاقات المصادر المعطلة
+    Array.from(gridEl.children).forEach((card) => {
+      const conn = card.getAttribute('data-connector');
+      if (filters[conn] === false) {
+        const id = card.getAttribute('data-id');
+        if (id) S.rendered.delete(id);
+        card.remove();
+      }
+    });
+
+    // 2) أعد تعيين الجلب — لجلب نتائج جديدة من المصادر المُفعّلة
+    S.pools.forEach((pool) => {
+      pool.imgPage = 1;
+      pool.vidPage = 1;
+      pool.imgMore = true;
+      pool.vidMore = true;
+    });
+
+    // 3) اعرض من الطوابير
+    forceRenderNext();
+
+    // 4) اجلب من المصادر
+    scheduleFill();
+  });
+
 
   gridEl.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('offline', () => { S.online = false; updateStatus(); });
@@ -150,7 +209,13 @@ async function loadMore() {
 
 function scheduleFill() {
   clearTimeout(S.timer);
-  S.timer = setTimeout(fillLoop, 100);
+  S.timer = setTimeout(() => {
+    if (S.filling) {
+      scheduleFill();
+      return;
+    }
+    fillLoop();
+  }, 150);
 }
 
 async function fillLoop() {
@@ -159,15 +224,37 @@ async function fillLoop() {
 
   try {
     let iter = 0;
+    let retries = 0;
+
     while (iter++ < MAX_ITER) {
       if (!S.online) break;
 
       const shown = gridEl.children.length;
       const scrollable = gridEl.scrollHeight > gridEl.clientHeight + 50;
-      if (shown >= BATCH && scrollable) break;
 
-      if (renderBatch()) continue;
-      if (!(await fetchOneNeeded())) break;
+      if (shown >= BATCH && scrollable) break;
+      if (shown >= BATCH * 3) break;
+
+      if (renderBatch()) {
+        retries = 0;
+        continue;
+      }
+
+      const more = await fetchOneNeeded();
+      if (more) {
+        retries = 0;
+        continue;
+      }
+
+      // fetchOneNeeded فشل — تحقق: هل هناك pools قد تُنتج لاحقًا؟
+      const anyMore = Array.from(S.pools.values()).some(
+        (p) => p.imgMore || p.vidMore
+      );
+      if (!anyMore) break;
+
+      // انتظر قليلًا ثم أعد المحاولة
+      await new Promise((r) => setTimeout(r, 250));
+      if (++retries > 3) break;
     }
   } finally {
     S.filling = false;
@@ -237,7 +324,10 @@ async function fetchImages(pool) {
     const fresh = items.filter((i) => i.type === 'image' && !existing.has(i.id));
     pool.images.push(...fresh);
     pool.imgPage++;
-    if (fresh.length < 3) pool.imgMore = false;
+
+    // ← الإصلاح: حسب items (raw API) وليس fresh (بعد الفلترة)
+    if (items.length < 3) pool.imgMore = false;
+
     return fresh.length > 0;
   } catch {
     pool.imgMore = false;
@@ -257,7 +347,10 @@ async function fetchVideos(pool) {
     const fresh = items.filter((i) => i.type === 'video' && !existing.has(i.id));
     pool.videos.push(...fresh);
     pool.vidPage++;
-    if (fresh.length < 2) pool.vidMore = false;
+
+    // ← الإصلاح
+    if (items.length < 2) pool.vidMore = false;
+
     return fresh.length > 0;
   } catch {
     pool.vidMore = false;
@@ -268,34 +361,53 @@ async function fetchVideos(pool) {
 }
 
 async function searchConnectors(query, page, perPage, filter) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  const apiKeys = {};
+  let apiKeys = {};
+  let sourceFilters = {};
   try {
     const data = getUserData();
     Object.assign(apiKeys, data.api_keys || {});
+    sourceFilters = data.source_filters || {};
   } catch {}
 
-  try {
-    const results = await Promise.allSettled(
-      getEnabled(apiKeys).map((c) =>
-        c.search(query, {
-          page, perPage,
-          signal: controller.signal,
-          apiKeys,
-          filter
-        }).catch(() => [])
-      )
-    );
-    const all = [];
-    results.forEach((r) => {
-      if (r.status === 'fulfilled') all.push(...r.value);
-    });
-    return all;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const enabled = getEnabled(apiKeys, sourceFilters);
+
+  const tasks = enabled.map(async (c) => {
+    if (isConnectorCoolingDown(c.id)) {
+      return { id: c.id, items: [], error: 'cooldown' };
+    }
+
+    // PeerTube: timeout قصير
+    const perTimeout = c.id === 'peertube' ? 4000 : 12000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), perTimeout);
+
+    try {
+      const items = await c.search(query, {
+        page,
+        perPage,
+        signal: controller.signal,
+        apiKeys,
+        filter
+      });
+      markConnectorSuccess(c.id);
+      return { id: c.id, items: items || [], error: null };
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        markConnectorFailed(c.id);
+      }
+      return { id: c.id, items: [], error: err.message };
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
+  const results = await Promise.all(tasks);
+
+  const all = [];
+  results.forEach((r) => {
+    if (r.items && r.items.length > 0) all.push(...r.items);
+  });
+  return all;
 }
 
 /* ============ Fetch One ============ */
@@ -307,19 +419,23 @@ async function fetchOneNeeded() {
   const f = S.filter;
 
   if (f === 'all' || f === 'image') {
-    const imgs = pools.filter((p) => p.imgMore && !S.loading.has(`${p.query}::img`));
-    if (imgs.length > 0) {
-      imgs.sort((a, b) => a.images.length - b.images.length);
-      if (await fetchImages(imgs[0])) return true;
+    const imgs = pools.filter(
+      (p) => p.imgMore && !S.loading.has(`${p.query}::img`)
+    );
+    imgs.sort((a, b) => a.images.length - b.images.length);
+    for (const p of imgs) {
+      if (await fetchImages(p)) return true;
     }
     if (f === 'image') return false;
   }
 
   if (f === 'all' || f === 'video') {
-    const vids = pools.filter((p) => p.vidMore && !S.loading.has(`${p.query}::vid`));
-    if (vids.length > 0) {
-      vids.sort((a, b) => a.videos.length - b.videos.length);
-      if (await fetchVideos(vids[0])) return true;
+    const vids = pools.filter(
+      (p) => p.vidMore && !S.loading.has(`${p.query}::vid`)
+    );
+    vids.sort((a, b) => a.videos.length - b.videos.length);
+    for (const p of vids) {
+      if (await fetchVideos(p)) return true;
     }
   }
 
@@ -332,15 +448,20 @@ function renderBatch() {
   const pools = Array.from(S.pools.values());
   if (pools.length === 0) return false;
 
+  const filters = getSourceFilters();
   const freshImages = [];
   const freshVideos = [];
 
   pools.forEach((p) => {
     p.images.forEach((it) => {
-      if (!S.rendered.has(it.id)) freshImages.push(it);
+      if (S.rendered.has(it.id)) return;
+      if (filters[it.connector_id] === false) return;
+      freshImages.push(it);
     });
     p.videos.forEach((it) => {
-      if (!S.rendered.has(it.id)) freshVideos.push(it);
+      if (S.rendered.has(it.id)) return;
+      if (filters[it.connector_id] === false) return;
+      freshVideos.push(it);
     });
   });
 
@@ -378,6 +499,20 @@ function renderBatch() {
 
   updateStatus();
   return true;
+}
+
+function forceRenderNext() {
+  let added = 0;
+  for (let i = 0; i < 5; i++) {
+    if (!renderBatch()) break;
+    added++;
+  }
+  // إذا لم يُضف شيئًا (الطوابير فارغة)، اجلب من المصادر
+  if (added === 0) {
+    fetchOneNeeded().then((more) => {
+      if (more) renderBatch();
+    });
+  }
 }
 
 function onCardClick(item) {

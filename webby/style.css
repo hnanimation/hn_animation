@@ -2039,3 +2039,168 @@ body.preview-fullscreen-open {
   z-index: 2;
   white-space: nowrap;
 }
+/* ============================================================
+   FIX A: Toggle ▼ OUTSIDE input, next to search button
+   ============================================================ */
+
+.topbar-search {
+  gap: 6px !important;
+}
+
+.topbar-search input {
+  order: 1 !important;
+  padding-inline-start: 14px !important;
+  padding-inline-end: 14px !important;
+}
+
+.search-history-toggle {
+  position: static !important;
+  order: 2 !important;
+  transform: none !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 50% !important;
+  background: var(--bg-panel-2) !important;
+  color: var(--text-muted) !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  z-index: auto !important;
+  transition: background 0.15s, color 0.15s, border-color 0.15s !important;
+}
+
+.search-history-toggle:hover {
+  background: var(--bg-hover) !important;
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+.search-history-toggle svg {
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.topbar-search #topbar-search-btn {
+  order: 3 !important;
+}
+/* ============================================================
+   FIX A2: Mobile topbar — logo compact + search takes space
+   ============================================================ */
+
+@media (max-width: 700px) {
+  /* اجعل الشريط صفًا واحدًا بدون wrap */
+  .topbar {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* اللوجو: صغير + ثابت */
+  .topbar-brand,
+  .topbar h1 {
+    font-size: 14px !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    max-width: 60px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* منطقة البحث: تأخذ كل المساحة المتبقية */
+  .topbar-search {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 4px !important;
+    max-width: none !important;
+  }
+
+  .topbar-search input {
+    font-size: 12px !important;
+    padding-block: 6px !important;
+    padding-inline: 10px !important;
+  }
+
+  /* الأزرار: ثابتة على اليسار */
+  .search-history-toggle,
+  .topbar-search #topbar-search-btn {
+    width: 28px !important;
+    height: 28px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .search-history-toggle svg,
+  .topbar-search #topbar-search-btn svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+}
+/* ============================================================
+   FIX: Install PWA Button — 20% smaller + reduced height
+   ============================================================ */
+
+.install-pwa-btn {
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  gap: 4px !important;
+  line-height: 1.2 !important;
+  border-radius: 6px !important;
+}
+/* ============================================================
+   FIX: Install button — fix text layout inside button
+   ============================================================ */
+
+.install-pwa-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  line-height: 1.4 !important;
+  overflow: hidden !important;
+  vertical-align: middle !important;
+}
+
+.install-pwa-btn > * {
+  display: inline-block !important;
+  line-height: 1.4 !important;
+  vertical-align: middle !important;
+  white-space: nowrap !important;
+}
+
+/* ============================================================
+   FIX: Source dropdown — position fixed, independent
+   ============================================================ */
+
+#webby-source-dropdown.web-source-dropdown {
+  position: fixed !important;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  min-width: 220px;
+  max-width: 90vw;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  font-size: 13px;
+  z-index: 2000;
+}
+
+#webby-source-dropdown.web-source-dropdown[hidden] {
+  display: none;
+}

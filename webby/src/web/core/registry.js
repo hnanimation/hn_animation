@@ -17,8 +17,12 @@ export function get(id) {
   return registry.get(id) || null;
 }
 
-export function getEnabled(apiKeys = {}) {
+export function getEnabled(apiKeys = {}, sourceFilters = {}) {
   return getAll().filter((c) => {
+    // فلتر المستخدم
+    if (sourceFilters[c.id] === false) return false;
+
+    // فحص المفتاح
     if (!c.keyRequired) return true;
     const key = apiKeys[`${c.id}_key`];
     return Boolean(key && String(key).trim());

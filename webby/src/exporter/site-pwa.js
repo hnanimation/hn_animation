@@ -193,14 +193,19 @@ export const WEBBY_FILES = [
   'src/web/core/content-item.js',
   'src/web/core/connector.js',
   'src/web/core/registry.js',
+  'src/web/core/connector-cooldown.js',
   'src/web/connectors/openverse.js',
   'src/web/connectors/wikimedia.js',
+  'src/web/connectors/pexels.js',
+  'src/web/connectors/peertube.js',
   'src/web/connectors/internet-archive.js',
   'src/web/ui/cards.js',
   'src/web/ui/search-history.js',
   'src/web/ui/search-view.js',
   'src/web/ui/video-modal.js',
-  'src/web/ui/view.js'
+  'src/web/ui/view.js',
+  'src/web/ui/web-settings.js',
+  'src/web/ui/source-filter.js'
 ];
 
 /**

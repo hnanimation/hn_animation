@@ -421,3 +421,335 @@ dialog.web-video-modal::backdrop {
   color: var(--text-muted);
   font-size: 14px;
 }
+/* ============================================================
+   Settings Button
+   ============================================================ */
+
+.web-settings-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.web-settings-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.web-settings-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 700px) {
+  .web-settings-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .web-settings-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* ============================================================
+   Settings Modal
+   ============================================================ */
+
+dialog.web-settings-modal {
+  border: none;
+  padding: 0;
+  background: var(--bg-panel);
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  max-width: 92vw;
+  width: 460px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  font-family: var(--font);
+}
+
+dialog.web-settings-modal::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.ws-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ws-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-close:hover {
+  background: var(--bg-hover);
+}
+
+.ws-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.ws-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ws-section-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ws-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.ws-hint a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ws-hint a:hover {
+  text-decoration: underline;
+}
+
+.ws-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-field > span {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.ws-field input {
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ws-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ws-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.ws-btn-cancel,
+.ws-btn-save {
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ws-btn-cancel {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel-2);
+  color: var(--text);
+}
+
+.ws-btn-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.ws-btn-save {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.ws-btn-save:hover {
+  background: #3d8ae6;
+}
+/* ============================================================
+   Web Actions (buttons group)
+   ============================================================ */
+
+.web-actions {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.web-source-filter-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ============================================================
+   Source Dropdown
+   ============================================================ */
+
+.web-source-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  min-width: 220px;
+  max-width: 90vw;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  font-size: 13px;
+  z-index: 1000;
+}
+
+.web-source-dropdown[hidden] {
+  display: none;
+}
+
+.wsd-all-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.wsd-all-row:hover {
+  background: var(--bg-hover);
+}
+
+.wsd-all-row input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+}
+
+.wsd-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.wsd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.wsd-row:hover {
+  background: var(--bg-hover);
+}
+
+.wsd-row input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.wsd-row input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.wsd-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.wsd-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.wsd-status.on {
+  background: rgba(111, 220, 140, 0.15);
+  color: #6fdc8c;
+}
+
+.wsd-status.off {
+  background: rgba(255, 136, 136, 0.15);
+  color: #ff8888;
+}
+
+.wsd-status.missing {
+  background: rgba(127, 127, 127, 0.15);
+  color: var(--text-muted);
+}

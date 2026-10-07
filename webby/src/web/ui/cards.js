@@ -3,6 +3,7 @@ const MAX_RETRIES = 2;
 export function createCard(item, onClick) {
   const card = document.createElement('article');
   card.className = 'web-card';
+  card.setAttribute('data-id', item.id);
   card.setAttribute('data-connector', item.connector_id);
   card.setAttribute('data-type', item.type || 'image');
 
